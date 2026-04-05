@@ -11,6 +11,7 @@ from io import RawIOBase, UnsupportedOperation
 from math import ceil
 from mmap import mmap
 from operator import length_hint
+import os
 from os import PathLike, stat
 from threading import Event, RLock, Thread
 from types import TracebackType
@@ -1093,7 +1094,6 @@ class Progress(JupyterMixin):
         self.columns = columns or self.get_default_columns()
         self.speed_estimate_period = speed_estimate_period
 
-        self.disable = disable
         self.expand = expand
         self._tasks: Dict[TaskID, Task] = {}
         self._task_index: TaskID = TaskID(0)
@@ -1105,6 +1105,9 @@ class Progress(JupyterMixin):
             redirect_stdout=redirect_stdout,
             redirect_stderr=redirect_stderr,
             get_renderable=self.get_renderable,
+        )
+        self.disable = (
+            disable or self.console._environ.get("RICH_DISABLE_PROGRESS", "") != ""
         )
         self.get_time = get_time or self.console.get_time
         self.print = self.console.print

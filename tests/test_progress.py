@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 import rich.progress
+import time
 from rich.console import Console
 from rich.highlighter import NullHighlighter
 from rich.progress import (
@@ -682,6 +683,18 @@ def test_task_progress_column_speed() -> None:
 
     speed_text = TaskProgressColumn.render_speed(8888888)
     assert speed_text.plain == "8.9×10⁶ it/s"
+
+
+def test_disable_progress() -> None:
+    console = Console(
+        file=io.StringIO(),
+        force_terminal=True,
+        _environ={"RICH_DISABLE_PROGRESS": "1"},
+    )
+    values = list(track(range(5), console=console, description="Testing..."))
+    assert values == [0, 1, 2, 3, 4]
+    assert console.file.getvalue() == ""
+    print("RICH_DISABLE_PROGRESS: progress bar suppressed successfully")
 
 
 if __name__ == "__main__":
