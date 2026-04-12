@@ -1088,6 +1088,7 @@ class Progress(JupyterMixin):
         get_time: Optional[GetTimeCallable] = None,
         disable: bool = False,
         expand: bool = False,
+        auto_remove: bool = False,
     ) -> None:
         assert refresh_per_second > 0, "refresh_per_second must be > 0"
         self._lock = RLock()
@@ -1095,6 +1096,7 @@ class Progress(JupyterMixin):
         self.speed_estimate_period = speed_estimate_period
 
         self.expand = expand
+        self.auto_remove = auto_remove
         self._tasks: Dict[TaskID, Task] = {}
         self._task_index: TaskID = TaskID(0)
         self.live = Live(
@@ -1477,6 +1479,11 @@ class Progress(JupyterMixin):
 
         if refresh:
             self.refresh()
+
+        if self.auto_remove:
+            task = self._tasks.get(task_id)
+            if task is not None and task.finished:
+                self.remove_task(task_id)
 
     def reset(
         self,

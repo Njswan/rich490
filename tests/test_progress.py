@@ -696,6 +696,24 @@ def test_disable_progress() -> None:
     assert console.file.getvalue() == ""
     print("RICH_DISABLE_PROGRESS: progress bar suppressed successfully")
 
+def test_disable_progress() -> None:
+    console = Console(
+        file=io.StringIO(),
+        force_terminal=True,
+        _environ={"RICH_DISABLE_PROGRESS": "1"},
+    )
+    values = list(track(range(5), console=console, description="Testing..."))
+    assert values == [0, 1, 2, 3, 4]
+    assert console.file.getvalue() == ""
+    print("RICH_DISABLE_PROGRESS: progress bar suppressed successfully")
+
+
+def test_auto_remove() -> None:
+    progress = Progress(auto_refresh=False, auto_remove=True)
+    task_id = progress.add_task("foo", total=10)
+    progress.update(task_id, completed=10)
+    assert task_id not in progress.task_ids
+
 
 if __name__ == "__main__":
     _render = render_progress()
