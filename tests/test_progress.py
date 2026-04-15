@@ -29,6 +29,7 @@ from rich.progress import (
     TransferSpeedColumn,
     _TrackThread,
     track,
+    nested_track,
 )
 from rich.progress_bar import ProgressBar
 from rich.text import Text
@@ -689,12 +690,42 @@ def test_disable_progress() -> None:
     console = Console(
         file=io.StringIO(),
         force_terminal=True,
+        width=60,
+        color_system="truecolor",
+        legacy_windows=False,
         _environ={"RICH_DISABLE_PROGRESS": "1"},
     )
     values = list(track(range(5), console=console, description="Testing..."))
     assert values == [0, 1, 2, 3, 4]
     assert console.file.getvalue() == ""
     print("RICH_DISABLE_PROGRESS: progress bar suppressed successfully")
+
+    def test_nested_track() -> None:
+        """nested_track supports nested loops without LiveError and cleans up state."""
+        console = Console(
+            file=io.StringIO(),
+            force_terminal=True,
+            width=60,
+            color_system="truecolor",
+            legacy_windows=False,
+            _environ={},
+        )
+        rich.progress._shared_progress = None
+        rich.progress._nest_depth = 0
+
+        total = 0
+        for i in nested_track(
+                range(2),
+                description="Outer",
+                console=console,
+                disable=True,
+        ):
+            for j in nested_track(range(3), description="Inner", disable=True):
+                total += 1
+
+        assert total == 6
+        assert rich.progress._shared_progress is None
+        assert rich.progress._nest_depth == 0
 
 
 if __name__ == "__main__":
