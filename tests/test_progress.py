@@ -696,6 +696,40 @@ def test_disable_progress() -> None:
     assert console.file.getvalue() == ""
     print("RICH_DISABLE_PROGRESS: progress bar suppressed successfully")
 
+def test_auto_remove() -> None:
+    progress = Progress(auto_refresh=False, auto_remove=True)
+    task_id = progress.add_task("foo", total=10)
+    progress.update(task_id, completed=10)
+    assert task_id not in progress.task_ids
+
+
+def test_nested_track() -> None:
+    """nested_track supports nested loops without LiveError and cleans up state."""
+    console = Console(
+        file=io.StringIO(),
+        force_terminal=True,
+        width=60,
+        color_system="truecolor",
+        legacy_windows=False,
+        _environ={},
+    )
+    rich.progress._shared_progress = None
+    rich.progress._nest_depth = 0
+
+    total = 0
+    for i in nested_track(
+            range(2),
+            description="Outer",
+            console=console,
+            disable=True,
+    ):
+        for j in nested_track(range(3), description="Inner", disable=True):
+            total += 1
+
+    assert total == 6
+    assert rich.progress._shared_progress is None
+    assert rich.progress._nest_depth == 0
+
 
 if __name__ == "__main__":
     _render = render_progress()

@@ -178,7 +178,121 @@ def track(
             description=description,
             update_period=update_period,
         )
+# Module-level shared state for nested_track
+_shared_progress: Optional[Progress] = None
+_nest_depth: int = 0
+_nest_lock: RLock = RLock()
 
+
+def nested_track(
+    sequence: Iterable[ProgressType],
+    description: str = "Working...",
+    total: Optional[float] = None,
+    completed: int = 0,
+    auto_refresh: bool = True,
+    console: Optional[Console] = None,
+    transient: bool = False,
+    get_time: Optional[Callable[[], float]] = None,
+    refresh_per_second: float = 10,
+    style: StyleType = "bar.back",
+    complete_style: StyleType = "bar.complete",
+    finished_style: StyleType = "bar.finished",
+    pulse_style: StyleType = "bar.pulse",
+    update_period: float = 0.1,
+    disable: bool = False,
+    show_speed: bool = True,
+) -> Iterable[ProgressType]:
+    """Track progress by iterating over a sequence.
+
+    Supports nested loops. Unlike ``track()``, multiple calls to ``nested_track()``
+    share a single ``Progress`` display, so nesting will not raise ``LiveError``.
+
+    Note:
+        Style and column parameters (``style``, ``console``, ``transient``, etc.)
+        only take effect on the outermost call that creates the ``Progress`` instance.
+        Inner calls reuse the existing display and ignore these parameters.
+
+    Args:
+        sequence (Iterable[ProgressType]): A sequence you wish to iterate over.
+        description (str, optional): Description of task show next to progress bar. Defaults to "Working".
+        total: (float, optional): Total number of steps. Default is len(sequence).
+        completed (int, optional): Number of steps completed so far. Defaults to 0.
+        auto_refresh (bool, optional): Automatic refresh. Default is True.
+        transient: (bool, optional): Clear the progress on exit. Defaults to False.
+        console (Console, optional): Console to write to. Default creates internal Console instance.
+        refresh_per_second (float): Number of times per second to refresh. Defaults to 10.
+        style (StyleType, optional): Style for the bar background. Defaults to "bar.back".
+        complete_style (StyleType, optional): Style for the completed bar. Defaults to "bar.complete".
+        finished_style (StyleType, optional): Style for a finished bar. Defaults to "bar.finished".
+        pulse_style (StyleType, optional): Style for pulsing bars. Defaults to "bar.pulse".
+        update_period (float, optional): Minimum time (in seconds) between calls to update(). Defaults to 0.1.
+        disable (bool, optional): Disable display of progress.
+        show_speed (bool, optional): Show speed if total isn't known. Defaults to True.
+
+    Returns:
+        Iterable[ProgressType]: An iterable of the values in the sequence.
+    """
+    global _shared_progress, _nest_depth
+
+    with _nest_lock:
+        if _shared_progress is None:
+            # Outermost call - create the Progress instance
+            columns: List[ProgressColumn] = (
+                [TextColumn("[progress.description]{task.description}")]
+                if description
+                else []
+            )
+            columns.extend(
+                (
+                    BarColumn(
+                        style=style,
+                        complete_style=complete_style,
+                        finished_style=finished_style,
+                        pulse_style=pulse_style,
+                    ),
+                    TaskProgressColumn(show_speed=show_speed),
+                    TimeRemainingColumn(elapsed_when_finished=True),
+                )
+            )
+            _shared_progress = Progress(
+                *columns,
+                auto_refresh=auto_refresh,
+                console=console,
+                transient=transient,
+                get_time=get_time,
+                refresh_per_second=refresh_per_second or 10,
+                disable=disable,
+            )
+            _shared_progress.start()
+
+        _nest_depth += 1
+        progress = _shared_progress
+
+    # Add task outside the lock - Progress handles its own thread safety
+    if _nest_depth <= 1:
+        indented = description
+    else:
+        prefix = "  " * (_nest_depth - 2) + "╰── "
+        indented = f"{prefix}{description}"
+    task_id = progress.add_task(indented, total=total, completed=completed)
+
+    try:
+        yield from progress.track(
+            sequence,
+            total=total,
+            completed=completed,
+            task_id=task_id,
+            description=indented,
+            update_period=update_period,
+        )
+    finally:
+        with _nest_lock:
+            _nest_depth -= 1
+            if _nest_depth == 0:
+                progress.stop()
+                _shared_progress = None
+            else:
+                progress.remove_task(task_id)
 
 class _Reader(RawIOBase, BinaryIO):
     """A reader that tracks progress while it's being read from."""
@@ -1088,6 +1202,7 @@ class Progress(JupyterMixin):
         get_time: Optional[GetTimeCallable] = None,
         disable: bool = False,
         expand: bool = False,
+        auto_remove: bool = False,
     ) -> None:
         assert refresh_per_second > 0, "refresh_per_second must be > 0"
         self._lock = RLock()
@@ -1095,6 +1210,7 @@ class Progress(JupyterMixin):
         self.speed_estimate_period = speed_estimate_period
 
         self.expand = expand
+        self.auto_remove = auto_remove
         self._tasks: Dict[TaskID, Task] = {}
         self._task_index: TaskID = TaskID(0)
         self.live = Live(
@@ -1477,6 +1593,11 @@ class Progress(JupyterMixin):
 
         if refresh:
             self.refresh()
+
+        if self.auto_remove:
+            task = self._tasks.get(task_id)
+            if task is not None and task.finished:
+                self.remove_task(task_id)
 
     def reset(
         self,

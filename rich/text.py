@@ -184,9 +184,18 @@ class Text(JupyterMixin):
         return NotImplemented
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Text):
-            return NotImplemented
-        return self.plain == other.plain and self._spans == other._spans
+        if isinstance(other, str):
+            return self.plain == other
+        if isinstance(other, Text):
+            return (self.plain == other.plain and self._spans == other._spans and self.style == other.style)
+        return NotImplemented
+
+    def __lt__(self, other: object) -> bool:
+        if isinstance(other, str):
+            return self.plain < other
+        if isinstance(other, Text):
+            return self.plain < other.plain
+        return NotImplemented
 
     def __contains__(self, other: object) -> bool:
         if isinstance(other, str):

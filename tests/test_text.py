@@ -1127,3 +1127,13 @@ def test_soft_wrap_styled() -> None:
     # Background is reset before \n
     expected = "\x1b[34;47msoft wrap is on\x1b[0m\nNext line\n"
     assert output == expected
+
+def test_text_comparison():
+    assert Text("hello", style="bold") == "hello"
+
+    assert Text("hello", style="bold") != Text("hello")
+
+    unsorted = [Text("Zebra"), "Banana", Text("Apple")]
+    sorted_list = sorted(unsorted, key=lambda x: x.plain if isinstance(x, Text) else x)
+
+    assert sorted_list == [Text("Apple"), "Banana", Text("Zebra")]
