@@ -1873,6 +1873,7 @@ class Console:
         show_locals: bool = False,
         suppress: Iterable[Union[str, ModuleType]] = (),
         max_frames: int = 100,
+        show_border: bool = True,
     ) -> None:
         """Prints a rich render of the last exception and traceback.
 
@@ -1884,6 +1885,7 @@ class Console:
             show_locals (bool, optional): Enable display of local variables. Defaults to False.
             suppress (Iterable[Union[str, ModuleType]]): Optional sequence of modules or paths to exclude from traceback.
             max_frames (int): Maximum number of frames to show in a traceback, 0 for no maximum. Defaults to 100.
+            show_border (bool, optional): Show border around traceback panels. Defaults to True.
         """
         from .traceback import Traceback
 
@@ -1895,6 +1897,7 @@ class Console:
             show_locals=show_locals,
             suppress=suppress,
             max_frames=max_frames,
+            show_border=show_border,
         )
         self.print(traceback)
 

@@ -99,6 +99,7 @@ def install(
     indent_guides: bool = True,
     suppress: Iterable[Union[str, ModuleType]] = (),
     max_frames: int = 100,
+    show_border: bool = True,
 ) -> Callable[[Type[BaseException], BaseException, Optional[TracebackType]], Any]:
     """Install a rich traceback handler.
 
@@ -123,6 +124,7 @@ def install(
         locals_overflow (OverflowMethod, optional): How to handle overflowing locals, or None to disable. Defaults to None.
         indent_guides (bool, optional): Enable indent guides in code and locals. Defaults to True.
         suppress (Sequence[Union[str, ModuleType]]): Optional sequence of modules or paths to exclude from traceback.
+        show_border (bool, optional): Show border around traceback panels. Defaults to True.
 
     Returns:
         Callable: The previous exception handler that was replaced.
@@ -160,6 +162,7 @@ def install(
             indent_guides=indent_guides,
             suppress=suppress,
             max_frames=max_frames,
+            show_border=show_border,
         )
         traceback_console.print(exception_traceback)
 
@@ -311,6 +314,7 @@ class Traceback:
         indent_guides: bool = True,
         suppress: Iterable[Union[str, ModuleType]] = (),
         max_frames: int = 100,
+        show_border: bool = True,
     ):
         if trace is None:
             exc_type, exc_value, traceback = sys.exc_info()
@@ -335,6 +339,7 @@ class Traceback:
         self.locals_hide_dunder = locals_hide_dunder
         self.locals_hide_sunder = locals_hide_sunder
         self.locals_overflow = locals_overlow
+        self.show_border = show_border
 
         self.suppress: Sequence[str] = []
         for suppress_entity in suppress:
@@ -371,6 +376,7 @@ class Traceback:
         indent_guides: bool = True,
         suppress: Iterable[Union[str, ModuleType]] = (),
         max_frames: int = 100,
+        show_border: bool = True,
     ) -> "Traceback":
         """Create a traceback from exception info
 
@@ -394,6 +400,7 @@ class Traceback:
             locals_overflow (OverflowMethod, optional): How to handle overflowing locals, or None to disable. Defaults to None.
             suppress (Iterable[Union[str, ModuleType]]): Optional sequence of modules or paths to exclude from traceback.
             max_frames (int): Maximum number of frames to show in a traceback, 0 for no maximum. Defaults to 100.
+            show_border (bool, optional): Show border around traceback panels. Defaults to True.
 
         Returns:
             Traceback: A Traceback instance that may be printed.
@@ -427,6 +434,7 @@ class Traceback:
             locals_overlow=locals_overflow,
             suppress=suppress,
             max_frames=max_frames,
+            show_border=show_border,
         )
 
     @classmethod
@@ -657,31 +665,40 @@ class Traceback:
         @group()
         def render_stack(stack: Stack, last: bool) -> RenderResult:
             if stack.frames:
-                stack_renderable: ConsoleRenderable = Panel(
-                    self._render_stack(stack),
-                    title="[traceback.title]Traceback [dim](most recent call last)",
-                    style=background_style,
-                    border_style="traceback.border",
-                    expand=True,
-                    padding=(0, 1),
-                )
+                if self.show_border:
+                    stack_renderable: ConsoleRenderable = Panel(
+                        self._render_stack(stack),
+                        title="[traceback.title]Traceback [dim](most recent call last)",
+                        style=background_style,
+                        border_style="traceback.border",
+                        expand=True,
+                        padding=(0, 1),
+                    )
+                else:
+                    stack_renderable = self._render_stack(stack)
                 stack_renderable = Constrain(stack_renderable, self.width)
                 with console.use_theme(traceback_theme):
                     yield stack_renderable
 
             if stack.syntax_error is not None:
                 with console.use_theme(traceback_theme):
-                    yield Constrain(
-                        Panel(
+                    if self.show_border:
+                        yield Constrain(
+                            Panel(
+                                self._render_syntax_error(stack.syntax_error),
+                                style=background_style,
+                                border_style="traceback.border.syntax_error",
+                                expand=True,
+                                padding=(0, 1),
+                                width=self.width,
+                            ),
+                            self.width,
+                        )
+                    else:
+                        yield Constrain(
                             self._render_syntax_error(stack.syntax_error),
-                            style=background_style,
-                            border_style="traceback.border.syntax_error",
-                            expand=True,
-                            padding=(0, 1),
-                            width=self.width,
-                        ),
-                        self.width,
-                    )
+                            self.width,
+                        )
                 yield Text.assemble(
                     (f"{stack.exc_type}: ", "traceback.exc_type"),
                     highlighter(stack.syntax_error.msg),
@@ -703,14 +720,20 @@ class Traceback:
                     for group_last, group_stack in loop_last(group_exception.stacks):
                         grouped_exceptions.append(render_stack(group_stack, group_last))
                     yield ""
-                    yield Constrain(
-                        Panel(
+                    if self.show_border:
+                        yield Constrain(
+                            Panel(
+                                Group(*grouped_exceptions),
+                                title=f"Sub-exception #{group_no}",
+                                border_style="traceback.group.border",
+                            ),
+                            self.width,
+                        )
+                    else:
+                        yield Constrain(
                             Group(*grouped_exceptions),
-                            title=f"Sub-exception #{group_no}",
-                            border_style="traceback.group.border",
-                        ),
-                        self.width,
-                    )
+                            self.width,
+                        )
 
             if not last:
                 if stack.is_cause:
@@ -779,6 +802,7 @@ class Traceback:
                     max_string=self.locals_max_string,
                     max_depth=self.locals_max_depth,
                     overflow=self.locals_overflow,
+                    show_border=self.show_border,
                 )
 
         exclude_frames: Optional[range] = None

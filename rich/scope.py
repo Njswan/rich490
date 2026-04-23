@@ -21,6 +21,7 @@ def render_scope(
     max_string: Optional[int] = None,
     max_depth: Optional[int] = None,
     overflow: Optional["OverflowMethod"] = None,
+    show_border: bool = True,
 ) -> "ConsoleRenderable":
     """Render python variables in a given scope.
 
@@ -34,6 +35,7 @@ def render_scope(
         max_string (int, optional): Maximum length of string before truncating, or None to disable. Defaults to None.
         max_depth (int, optional): Maximum depths of locals before truncating, or None to disable. Defaults to None.
         overflow (OverflowMethod, optional): How to handle overflowing locals, or None to disable. Defaults to None.
+        show_border (bool, optional): Show border around scope. Defaults to True.
 
     Returns:
         ConsoleRenderable: A renderable object.
@@ -65,12 +67,14 @@ def render_scope(
                 overflow=overflow,
             ),
         )
-    return Panel.fit(
-        items_table,
-        title=title,
-        border_style="scope.border",
-        padding=(0, 1),
-    )
+    if show_border:
+        return Panel.fit(
+            items_table,
+            title=title,
+            border_style="scope.border",
+            padding=(0, 1),
+        )
+    return items_table
 
 
 if __name__ == "__main__":  # pragma: no cover
