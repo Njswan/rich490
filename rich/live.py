@@ -37,7 +37,7 @@ class _RefreshThread(Thread):
                 if not self.done.is_set():
                     self.live.refresh()
 
-
+MAX_ALT_SCREEN_MESSAGES = 100
 class Live(JupyterMixin, RenderHook):
     """Renders an auto-updating live display of any given renderable.
 
@@ -54,7 +54,9 @@ class Live(JupyterMixin, RenderHook):
         get_renderable (Callable[[], RenderableType], optional): Optional callable to get renderable. Defaults to None.
     """
 
+
     def __init__(
+
         self,
         renderable: Optional[RenderableType] = None,
         *,
@@ -73,6 +75,8 @@ class Live(JupyterMixin, RenderHook):
         self.console = console if console is not None else get_console()
         self._screen = screen
         self._alt_screen = False
+        self._alt_screen_messages: List[ConsoleRenderable] = []
+
 
         self._redirect_stdout = redirect_stdout
         self._redirect_stderr = redirect_stderr
@@ -284,17 +288,28 @@ class Live(JupyterMixin, RenderHook):
             # lock needs acquiring as user can modify live_render renderable at any time unlike in Progress.
             with self._lock:
                 reset = (
-                    Control.home()
-                    if self._alt_screen
-                    else self._live_render.position_cursor()
+                    Control.home() if self._alt_screen else self._live_render.position_cursor()
                 )
-                renderables = [reset, *renderables, self._live_render]
+
+                if self._alt_screen:
+                    renderables = [reset, *self._alt_screen_messages, self._live_render]
+                else:
+                    renderables = [reset, *renderables, self._live_render]
         elif (
             not self._started and not self.transient
         ):  # if it is finished render the final output for files or dumb_terminals
             renderables = [*renderables, self._live_render]
 
         return renderables
+
+
+
+    def _push_alt_screen_message(self, renderable: ConsoleRenderable) -> None:
+        with self._lock:
+            self.alt_screen_message.append(renderable)
+
+            if len(self.alt_screen_message)>MAX_ALT_SCREEN_MESSAGES:
+                self.alt_screen_message.pop(0)
 
 
 if __name__ == "__main__":  # pragma: no cover
